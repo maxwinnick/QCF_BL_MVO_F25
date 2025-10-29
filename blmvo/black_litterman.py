@@ -42,7 +42,10 @@ def compute_market_implied_returns(
     market_weights: np.ndarray,
     risk_aversion: float,
 ) -> np.ndarray:
-    """Reverse optimization to obtain equilibrium (implied) returns."""
+    """Reverse optimisation to obtain the equilibrium (implied) returns."""
+
+    if risk_aversion <= 0:
+        raise ValueError("Risk aversion must be strictly positive.")
 
     market_weights = np.asarray(market_weights, dtype=float)
     covariance = np.asarray(covariance, dtype=float)
@@ -112,21 +115,44 @@ def black_litterman_posterior(
     Q: np.ndarray | None = None,
     Omega: np.ndarray | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return the implied returns, posterior returns and covariance."""
+    """Return the equilibrium returns and the Black-Litterman posterior."""
+
+    if tau < 0:
+        raise ValueError("Tau must be non-negative.")
 
     covariance = np.asarray(covariance, dtype=float)
     market_weights = np.asarray(market_weights, dtype=float)
     pi = compute_market_implied_returns(covariance, market_weights, risk_aversion)
 
+    tau_sigma = tau * covariance
+
     if P is None or Q is None or Omega is None or len(P) == 0:
-        posterior_mean = pi
-        posterior_cov = covariance
-    else:
-        tau_sigma = tau * covariance
-        inv_tau_sigma = np.linalg.inv(tau_sigma)
-        inv_omega = np.linalg.inv(Omega)
-        middle_term = np.linalg.inv(inv_tau_sigma + P.T @ inv_omega @ P)
-        posterior_mean = middle_term @ (inv_tau_sigma @ pi + P.T @ inv_omega @ Q)
-        posterior_cov = covariance + middle_term
+        posterior_cov = covariance + tau_sigma
+        return pi, pi.copy(), posterior_cov
+
+    P = np.asarray(P, dtype=float)
+    Q = np.asarray(Q, dtype=float).reshape(-1)
+    Omega = np.asarray(Omega, dtype=float)
+
+    n_views, n_assets = P.shape
+    if Q.shape[0] != n_views:
+        raise ValueError("Q must have the same number of rows as P.")
+    if Omega.shape != (n_views, n_views):
+        raise ValueError("Omega must be square with dimension equal to the number of views.")
+    if n_assets != covariance.shape[0]:
+        raise ValueError("P must have the same number of columns as there are assets.")
+
+    # Core Black-Litterman equations using the canonical closed-form solution.
+    tau_sigma_Pt = tau_sigma @ P.T
+    M = P @ tau_sigma_Pt + Omega
+    diff = Q - P @ pi
+    # Posterior mean.
+    solved_diff = np.linalg.solve(M, diff)
+    posterior_mean = pi + tau_sigma_Pt @ solved_diff
+    # Posterior covariance of returns.
+    solved_cov = np.linalg.solve(M, P @ tau_sigma)
+    posterior_cov = covariance + tau_sigma - tau_sigma_Pt @ solved_cov
+    # Numerical guards for symmetry.
+    posterior_cov = (posterior_cov + posterior_cov.T) / 2
 
     return pi, posterior_mean, posterior_cov
