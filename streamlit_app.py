@@ -77,7 +77,7 @@ def main() -> None:
     mu_sample, cov_sample = compute_sample_statistics(prices)
     assets = list(mu_sample.index)
 
-    risk_aversion = st.sidebar.slider("Risk aversion (δ)", min_value=1.0, max_value=5.0, value=3.0, step=0.1)
+    delta = st.sidebar.slider("Risk aversion (δ)", min_value=1.0, max_value=5.0, value=3.0, step=0.1)
     tau = st.sidebar.slider("Tau (scales prior uncertainty)", min_value=0.01, max_value=0.5, value=0.05, step=0.01)
 
     st.sidebar.subheader("Market Weights")
@@ -136,7 +136,7 @@ def main() -> None:
     pi, posterior_mean, posterior_cov = black_litterman_posterior(
         covariance=cov_sample.values,
         market_weights=market_weights.values,
-        risk_aversion=risk_aversion,
+        risk_aversion=delta,
         tau=tau,
         P=P,
         Q=Q,
@@ -154,8 +154,13 @@ def main() -> None:
     st.dataframe(returns_df.style.format("{:.4%}"))
 
     st.subheader("Optimised Portfolio Weights")
-    mv_weights = mean_variance_weights(mu_sample.values, cov_sample.values, risk_aversion=1.0)
-    bl_weights = mean_variance_weights(posterior_mean, posterior_cov, risk_aversion=1.0)
+    # The mean-variance objective implemented in ``mean_variance_weights`` uses
+    # ``mu @ w - penalty * w'Σw``. For a classical quadratic utility of
+    # ``mu @ w - δ/2 * w'Σw`` we therefore supply ``δ / 2`` as the penalty.
+    mv_penalty = delta / 2.0
+
+    mv_weights = mean_variance_weights(mu_sample.values, cov_sample.values, risk_aversion=mv_penalty)
+    bl_weights = mean_variance_weights(posterior_mean, posterior_cov, risk_aversion=mv_penalty)
 
     weights_df = pd.DataFrame(
         {
