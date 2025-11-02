@@ -1,4 +1,4 @@
-# Black-Litterman Mean-Variance Optimisation Toolkit
+# Black-Litterman Mean-Variance Optimization Toolkit
 
 This project provides a from-scratch implementation of the Black-Litterman portfolio construction framework together with a teaching-oriented Streamlit dashboard. The toolkit can be used to explore how investor views, confidence levels, and Bayesian updates interact with traditional mean-variance optimisation.
 
